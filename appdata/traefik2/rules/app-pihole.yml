@@ -1,0 +1,21 @@
+http:
+  routers:
+    pihole-rtr:
+      rule: "HostHeader(`pihole.haresign.dev`)" 
+      entryPoints:
+        - https
+      middlewares:
+        - chain-authelia
+        - pihole-add-admin
+      service: pihole-svc
+      tls:
+        certResolver: dns-cloudflare
+  middlewares:
+    pihole-add-admin:
+      addPrefix: 
+        prefix: "/admin"
+  services:
+    pihole-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.0.65:80"  # or whatever your external host's IP:port is 

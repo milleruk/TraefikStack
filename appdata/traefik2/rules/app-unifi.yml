@@ -1,0 +1,28 @@
+http:
+  routers:
+    unifi-https:
+      rule: "Host(`unifi.haresign.dev`)"
+      service: unifi-service
+      middlewares:
+        - chain-authelia
+      entrypoints:
+        - https
+      tls: {} # <-- AND THIS
+    unifi-http:
+      rule: "Host(`unifi.haresign.dev`)"
+      service: unifi-service
+      entrypoints:
+        - http
+      middlewares:
+        - https-redirect
+  services:
+    unifi-service:
+      loadBalancer:
+        servers:
+          - url: "https://10.0.0.60:8443/"
+
+  middlewares:
+    https-redirect:
+      redirectScheme:
+        scheme: https
+        permanent: true

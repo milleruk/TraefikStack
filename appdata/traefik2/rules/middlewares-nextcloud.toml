@@ -1,0 +1,27 @@
+[code]
+[http.middlewares]
+  [http.middlewares.nextcloud-middlewares-secure-headers]
+    [http.middlewares.nextcloud-middlewares-secure-headers.headers]
+      accessControlMaxAge = 100
+      hostsProxyHeaders = ["X-Forwarded-Host"]
+      sslRedirect = true
+      stsSeconds = 63072000
+      stsIncludeSubdomains = true
+      stsPreload = true
+      forceSTSHeader = true
+      customFrameOptionsValue = "SAMEORIGIN" #CSP takes care of this but may be needed for organizr.
+      contentTypeNosniff = true 
+      browserXssFilter = true
+      referrerPolicy = "same-origin"
+      featurePolicy = "camera 'none'; geolocation 'none'; microphone 'none'; payment 'none'; usb 'none'; vr 'none';"
+      [http.middlewares.nextcloud-middlewares-secure-headers.headers.customResponseHeaders]
+    ### We just need to set this to none
+        X-Robots-Tag = "none"
+        server = ""
+
+### This section redirects requests for Nextcloud calendar and contacts service discovery
+  [http.middlewares.nextcloud-redirect]
+    [http.middlewares.nextcloud-redirect.redirectRegex]
+      permanent = true
+      regex = "https://(.*)/.well-known/(card|cal)dav"
+      replacement = "https://${1}/remote.php/dav/"

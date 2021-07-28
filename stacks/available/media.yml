@@ -1,0 +1,168 @@
+version: "3.7"
+# STACK FOR MEDIA PLAYERS
+
+########################### NETWORKS
+# Define as EXTERNAL
+
+networks:
+  t2_proxy:
+    external: true
+  default:
+    external: true
+  socket_proxy:
+    external: true
+
+########################### SECRETS
+secrets:
+  plex_claim:
+    file: $SECRETSDIR/plex_claim
+
+########################### SERVICES
+services:
+  ############################# MEDIA
+
+  # Plex - Media Server
+  plexms:
+    image: linuxserver/plex
+    container_name: plexms
+    restart: "no"
+    networks:
+      t2_proxy:
+        ipv4_address: 192.168.90.150 # You can specify a static IP
+    #devices:
+    #  - /dev/dri:/dev/dri # for harware transcoding
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "$PLEX_PORT:32400/tcp"
+      - "3005:3005/tcp"
+      - "8324:8324/tcp"
+      - "32469:32469/tcp"
+      - "1900:1900/udp" # conflicts with xTeVe
+      - "32410:32410/udp"
+      - "32412:32412/udp"
+      - "32413:32413/udp"
+      - "32414:32414/udp"
+      #- "$PLEX_WEB_TOOLS_PORT:33400"
+    volumes:
+      - $DOCKERDIR/appdata/plexms:/config
+      - $DATADIR:/data/media
+      - $GDRIVEDATADIR:/data/gdrive
+      - $GSECUREDRIVE:/data/gsecure
+      #- /dev/shm:/data/transcode # Offload transcoding to RAM if you have enough RAM
+      # Optional. See why the folders below are mounted as volumes https://github.com/htpcBeginner/docker-traefik/discussions/147
+      - $SSDDATADIR/docker/appdata/plexms/Library/Application Support/Plex Media Server/Cache:/config/Library/Application Support/Plex Media Server/Cache
+      - $SSDDATADIR/docker/appdata/plexms/Library/Application Support/Plex Media Server/Metadata:/config/Library/Application Support/Plex Media Server/Metadata
+      - $SSDDATADIR/docker/appdata/plexms/Library/Application Support/Plex Media Server/Media:/config/Library/Application Support/Plex Media Server/Media
+    environment:
+      TZ: $TZ
+      HOSTNAME: "proxPlex"
+      PLEX_CLAIM_FILE: /run/secrets/plex_claim
+      PLEX_UID: $PUID
+      PLEX_GID: $PGID
+      #VIRTUAL_HOST: proxplex.$DOMAINNAME0
+      #VIRTUAL_PORT: 443
+      #VIRTUAL_NETWORK: t2_proxy
+      VERSION: docker
+    secrets:
+      - plex_claim
+    labels:
+      - "traefik.enable=true"
+      ## HTTP Routers
+      - "traefik.http.routers.plexms-rtr.entrypoints=https"
+      - "traefik.http.routers.plexms-rtr.rule=Host(`proxplex.$DOMAINNAME`)"
+      ## Middlewares
+      - "traefik.http.routers.plexms-rtr.middlewares=chain-no-auth@file"
+      ## HTTP Services
+      - "traefik.http.routers.plexms-rtr.service=plexms-svc"
+      - "traefik.http.services.plexms-svc.loadbalancer.server.port=32400"
+
+
+  # Tautulli - Previously PlexPy. Plex statistics and monitoring
+  # Set HTTP Root in Tautulli settings if using PathPrefix
+  tautulli:
+    image: linuxserver/tautulli:latest
+    container_name: tautulli
+    restart: unless-stopped
+    networks:
+      - t2_proxy
+    security_opt:
+      - no-new-privileges:true
+    # ports:
+    #  - "$TAUTULLI_PORT:8181"
+    volumes:
+      - $DOCKERDIR/appdata/tautulli/config:/config
+      - $DOCKERDIR/appdata/plexms/Library/Application Support/Plex Media Server/Logs:/logs:ro # For tautulli Plex log viewer
+    environment:
+      PUID: $PUID
+      PGID: $PGID
+      TZ: $TZ
+    labels:
+      - "traefik.enable=true"
+      ## HTTP Routers
+      - "traefik.http.routers.tautulli-rtr.entrypoints=https"
+      - "traefik.http.routers.tautulli-rtr.rule=Host(`tautulli.$DOMAINNAME`)"
+      ## Middlewares
+      - "traefik.http.routers.tautulli-rtr.middlewares=chain-no-auth@file"
+      ## HTTP Services
+      - "traefik.http.routers.tautulli-rtr.service=tautulli-svc"
+      - "traefik.http.services.tautulli-svc.loadbalancer.server.port=8181"
+
+  # emby - Media Server
+  emby:
+    image: ghcr.io/linuxserver/emby
+    container_name: emby
+    restart: "no"
+    networks:
+      - t2_proxy
+    #devices:
+    #  - /dev/dri:/dev/dri # for harware transcoding
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      PUID: $PUID
+      PGID: $PGID
+      TZ: $TZ
+      UMASK_SET: 022
+    volumes:
+      - $DOCKERDIR/appdata/emby:/config
+      - $DATADIR:/data/media
+      - $GDRIVEDATADIR:/data/gdrive
+      - $GSECUREDRIVE:/data/gsecure
+    labels:
+      - "traefik.enable=true"
+      ## HTTP Routers
+      - "traefik.http.routers.emby-rtr.entrypoints=https"
+      - "traefik.http.routers.emby-rtr.rule=Host(`media.$DOMAINNAME`)"
+      ## Middlewares
+      - "traefik.http.routers.emby-rtr.middlewares=chain-no-auth@file"
+      ## HTTP Services
+      - "traefik.http.routers.emby-rtr.service=emby-svc"
+      - "traefik.http.services.emby-svc.loadbalancer.server.port=8096"
+
+xteve:
+    image: alturismo/xteve
+    container_name: xteve
+    network_mode: "container:vpn"
+#    hostname: xteve
+#    ports:
+#      - 34400:34400
+#      - "1901:1900" #1900 used by Plex
+    volumes:
+      - $DOCKERDIR/appdata/xteve:/home/xteve/xteve
+    environment:
+      PUID: $PUID
+      PGID: $PGID
+      TZ: $TZ
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      ## HTTP Routers
+      - "traefik.http.routers.xteve-rtr.entrypoints=https"
+      - "traefik.http.routers.xteve-rtr.rule=Host(`xteve.$DOMAINNAME`)"
+      - "traefik.http.routers.xteve-rtr.tls=true"
+      ## Middlewares
+      - "traefik.http.routers.xteve-rtr.middlewares=chain-authelia@file"
+      ## HTTP Services
+      - "traefik.http.routers.xteve-rtr.service=xteve-svc"
+      - "traefik.http.services.xteve-svc.loadbalancer.server.port=344007"
